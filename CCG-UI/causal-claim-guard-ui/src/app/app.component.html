@@ -1,0 +1,291 @@
+<div class="app-shell">
+  <!-- LEFT: INPUT -->
+  <div class="left-panel">
+    <div class="left-inner">
+      <div class="brand-row">
+        <div class="brand">
+          <div class="brand-logo">𝒞</div>
+          <div>
+            <div class="brand-text-title">CausalClaim Guard</div>
+            <div class="brand-text-sub">Trustworthy Causal AI · Mini Engine</div>
+          </div>
+        </div>
+        <div class="badge-beta">Angular Frontend</div>
+      </div>
+
+      <div>
+        <div class="big-title">Analyze a causal claim</div>
+        <div class="big-subtitle">
+          Paste any short claim. The engine will detect the causal rung, build an SCM, compute an estimand, and score evidence trust.
+        </div>
+      </div>
+
+      <div style="margin-top: 10px;">
+        <div class="field-label">Claim</div>
+        <textarea
+          [(ngModel)]="claim"
+          class="textarea-claim"
+          placeholder="Example: Coffee affects sleep quality."
+          name="claimInput"
+        ></textarea>
+      </div>
+
+      <div class="row">
+        <div style="flex: 1;">
+          <div class="field-label">Domain</div>
+          <select [(ngModel)]="domain" class="select" name="domainSelect">
+            <option value="auto">Auto-detect (recommended)</option>
+            <option value="health">Health</option>
+            <option value="finance">Finance</option>
+          </select>
+        </div>
+        <div style="flex: 1;">
+          <div class="field-label">Evidence type</div>
+          <select [(ngModel)]="sourceType" class="select" name="sourceType">
+            <option value="">None</option>
+            <option value="peer-reviewed">Peer-reviewed</option>
+            <option value="whitepaper">Whitepaper</option>
+            <option value="news">News article</option>
+            <option value="blog">Blog / misc.</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="row">
+        <input
+          [(ngModel)]="sourceUrl"
+          class="input"
+          type="text"
+          name="sourceUrl"
+          placeholder="Evidence URL (optional)"
+        />
+      </div>
+
+      <div class="row">
+        <input
+          [(ngModel)]="sourceTitle"
+          class="input"
+          type="text"
+          name="sourceTitle"
+          placeholder="Evidence title (optional)"
+        />
+      </div>
+
+      <div class="row">
+        <input
+          [(ngModel)]="sourceYear"
+          class="input"
+          type="number"
+          placeholder="Year (e.g., 2024)"
+          name="sourceYear"
+        />
+        <input
+          [(ngModel)]="sampleSize"
+          class="input"
+          type="number"
+          placeholder="Sample size (e.g., 1200)"
+          name="sampleSize"
+        />
+      </div>
+
+      <button
+        class="button"
+        (click)="runAnalysis()"
+        [disabled]="loading"
+      >
+        <span class="button-icon">⚡️</span>
+        <span *ngIf="!loading">Run Causal Analysis</span>
+        <span *ngIf="loading">Analyzing…</span>
+      </button>
+
+      <div class="micro-copy">
+        Tip: Try claims like <b>“Coffee affects sleep quality”</b> (L2) or
+        <b>“If he hadn’t drunk coffee, he would have slept better”</b> (L3).
+      </div>
+    </div>
+  </div>
+
+  <!-- RIGHT: OUTPUT -->
+  <div class="right-panel">
+    <div class="status-row">
+      <div class="status-left">
+        <div class="status-dot" [class.status-dot-error]="backendStatus === 'error'"></div>
+        <span>{{ statusText }}</span>
+      </div>
+      <div class="status-right">
+        Backend: <span>{{ backendStatus }}</span>
+      </div>
+    </div>
+
+    <!-- CARD: CLAIM & RUNG -->
+    <div class="card">
+      <div class="section-title-row">
+        <div class="section-title">Claim & rung</div>
+        <div class="rung-pill" [ngClass]="rungClass">
+          <span
+            class="rung-dot"
+            [class.l1]="!result || result?.Rung === 'L1'"
+            [class.l2]="result?.Rung === 'L2'"
+            [class.l3]="result?.Rung === 'L3'"
+          ></span>
+          <span>{{ rungLabel }}</span>
+        </div>
+      </div>
+      <div class="claim-preview" [class.muted]="!result">
+        {{ result?.TextClaim || 'Enter a claim on the left and press “Run Causal Analysis”.' }}
+      </div>
+      <div class="chips-row" *ngIf="result">
+        <div class="chip">
+          <span class="chip-label">Domain</span> {{ result.Domain }}
+        </div>
+        <div class="chip">
+          <span class="chip-label">Rung</span> {{ result.Rung }}
+        </div>
+        <div class="chip" *ngIf="result.Template?.X">
+          <span class="chip-label">X</span> {{ result.Template.X }}
+        </div>
+        <div class="chip" *ngIf="result.Template?.Y">
+          <span class="chip-label">Y</span> {{ result.Template.Y }}
+        </div>
+      </div>
+    </div>
+
+        <!-- CARD: SCM TEMPLATE -->
+        <div class="card">
+          <div class="section-title-row">
+            <div class="section-title">SCM template</div>
+            <span class="pill-small">X, Y, Z · DAG summary</span>
+          </div>
+    
+          <!-- X/Y/Z pills -->
+          <div class="scm-row" *ngIf="result; else scmPlaceholder">
+            <span class="scm-pill-x">X: {{ result.Template.X }}</span>
+            <span class="scm-pill-y">Y: {{ result.Template.Y }}</span>
+            <span
+              class="scm-pill-z"
+              *ngFor="let z of result.Template.Z"
+            >
+              Z: {{ z }}
+            </span>
+          </div>
+          <ng-template #scmPlaceholder>
+            <div class="muted">SCM will appear here after analysis.</div>
+          </ng-template>
+    
+          <!-- DAG diagram -->
+          <div class="dag-container" *ngIf="dagNodes.length">
+            <svg class="dag-svg" viewBox="0 0 340 180">
+              <defs>
+                <marker id="arrowhead" markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto">
+                  <path d="M0,0 L6,3 L0,6 Z" fill="#9ca3af"></path>
+                </marker>
+              </defs>
+    
+              <!-- edges -->
+              <ng-container *ngFor="let edge of dagEdges">
+                <ng-container *ngIf="getNodeFor(edge.from) as fromNode">
+                  <ng-container *ngIf="getNodeFor(edge.to) as toNode">
+                    <line
+                      class="dag-edge"
+                      [attr.x1]="fromNode.x"
+                      [attr.y1]="fromNode.y"
+                      [attr.x2]="toNode.x"
+                      [attr.y2]="toNode.y"
+                      marker-end="url(#arrowhead)"
+                    />
+                  </ng-container>
+                </ng-container>
+              </ng-container>
+    
+              <!-- nodes -->
+              <ng-container *ngFor="let node of dagNodes">
+                <g [attr.transform]="'translate(' + node.x + ',' + node.y + ')'">
+                  <rect
+                    class="dag-node-rect"
+                    [ngClass]="{
+                      'dag-node-x': node.kind === 'X',
+                      'dag-node-y': node.kind === 'Y',
+                      'dag-node-z': node.kind === 'Z'
+                    }"
+                    x="-50"
+                    y="-14"
+                    rx="999"
+                    ry="999"
+                    width="100"
+                    height="28"
+                  ></rect>
+                  <text
+                    class="dag-node-label"
+                    text-anchor="middle"
+                    alignment-baseline="middle"
+                  >
+                    {{ node.label }}
+                  </text>
+                </g>
+              </ng-container>
+            </svg>
+          </div>
+    
+          <!-- Estimand -->
+          <div class="estimand-text" [class.muted]="!result">
+            <ng-container *ngIf="result; else estPlaceholder">
+              <ng-container *ngIf="result.Estimand.Identifiable; else notIdentifiable">
+                Identifiable. Estimand:
+                <br />
+                {{ result.Estimand.Expression }}
+                <br />
+                Reason: {{ result.Estimand.Reason }}
+              </ng-container>
+              <ng-template #notIdentifiable>
+                Not identifiable with current Z. {{ result.Estimand.Reason }}
+              </ng-template>
+            </ng-container>
+            <ng-template #estPlaceholder>
+              Estimand will be shown here if the effect is identifiable.
+            </ng-template>
+          </div>
+        </div>
+    
+    <!-- CARD: TRUST SCORES -->
+    <div class="card">
+      <div class="section-title-row">
+        <div class="section-title">Trust in evidence</div>
+        <span class="pill-small">T(m, c) · 0–1 scale</span>
+      </div>
+      <div class="bar-row">
+        <div class="bar-label-row">
+          <span>Trustworthiness (m)</span>
+          <span>{{ trustPercent }}%</span>
+        </div>
+        <div class="bar-shell">
+          <div class="bar-fill" [style.width.%]="trustPercent"></div>
+        </div>
+
+        <div class="bar-label-row">
+          <span>Confidence (c)</span>
+          <span>{{ confPercent }}%</span>
+        </div>
+        <div class="bar-shell">
+          <div class="bar-fill confidence" [style.width.%]="confPercent"></div>
+        </div>
+      </div>
+      <div class="hint-row">
+        <span>{{ trustHint }}</span>
+      </div>
+    </div>
+
+    <!-- CARD: EXPLANATION -->
+    <div class="card explanation-card">
+      <div class="section-title-row">
+        <div class="section-title">Explanation</div>
+        <span class="pill-small">Natural language summary</span>
+      </div>
+      <div class="explanation-text" [class.muted]="!result">
+        {{
+          result?.Explanation ||
+          'The explanation will appear here as a readable narrative describing: the rung, the SCM (X/Y/Z), identifiability, estimand, and trust in evidence.'
+        }}
+      </div>
+    </div>
+  </div>
+</div>
